@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenAI } from "@google/genai";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -16,17 +16,17 @@ export const KEYWORD_PROMPT = fs.readFileSync(
   "utf-8"
 );
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 // Gemini's built-in Google Search grounding tool lets the model actually search
 // the web instead of guessing, which the keyword prompt's [웹검색 실행 원칙] requires.
 async function callGemini(userMessage, { grounding = false } = {}) {
-  const model = genAI.getGenerativeModel({
+  const result = await ai.models.generateContent({
     model: "gemini-3.1-flash-lite",
-    tools: grounding ? [{ googleSearch: {} }] : undefined,
+    contents: userMessage,
+    config: grounding ? { tools: [{ googleSearch: {} }] } : undefined,
   });
-  const result = await model.generateContent(userMessage);
-  return result.response.text();
+  return result.text;
 }
 
 // Parses the structured output blocks the writing prompt asks the model to emit.
