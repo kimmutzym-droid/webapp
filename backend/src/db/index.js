@@ -33,6 +33,8 @@ CREATE TABLE IF NOT EXISTS posts (
   labels TEXT,
   sources_used TEXT,
   disclaimer TEXT,
+  thumbnail_url TEXT,
+  inline_image_url TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 

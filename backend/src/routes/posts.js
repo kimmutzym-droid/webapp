@@ -40,8 +40,8 @@ postsRouter.post("/", async (req, res) => {
     const postId = randomUUID();
 
     db.prepare(
-      `INSERT INTO posts (id, prompt, title, body_html, meta_description, labels, sources_used, disclaimer)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO posts (id, prompt, title, body_html, meta_description, labels, sources_used, disclaimer, thumbnail_url, inline_image_url)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       postId,
       prompt,
@@ -50,7 +50,9 @@ postsRouter.post("/", async (req, res) => {
       generated.metaDescription,
       JSON.stringify(generated.labels),
       generated.sourcesUsed,
-      generated.disclaimer
+      generated.disclaimer,
+      generated.thumbnailUrl,
+      generated.inlineImageUrl
     );
 
     const insertTarget = db.prepare(

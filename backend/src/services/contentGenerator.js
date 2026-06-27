@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import { generatePostImages } from "./imageGenerator.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROMPTS_DIR = path.resolve(__dirname, "../../../prompts");
@@ -37,6 +38,25 @@ function parseStructuredPost(text) {
   };
 }
 
+// Inserts the thumbnail as the first image (Blogger uses the first post image as
+// its auto-detected thumbnail) and places the inline image before the second H2
+// section so it breaks up the body roughly midway through.
+function insertImages(bodyHtml, { thumbnailUrl, inlineImageUrl }) {
+  const thumbnailTag = `<img src="${thumbnailUrl}" alt="thumbnail" />`;
+  const inlineTag = `<img src="${inlineImageUrl}" alt="" />`;
+
+  const h2Matches = [...bodyHtml.matchAll(/<h2[^>]*>/gi)];
+  let withInline = bodyHtml;
+  if (h2Matches.length >= 2) {
+    const insertAt = h2Matches[1].index;
+    withInline = bodyHtml.slice(0, insertAt) + inlineTag + bodyHtml.slice(insertAt);
+  } else {
+    withInline = `${bodyHtml}\n${inlineTag}`;
+  }
+
+  return `${thumbnailTag}\n${withInline}`;
+}
+
 export async function generatePost({ prompt, recentPosts = [] }) {
   const userMessage = `${WRITING_PROMPT}\n\n---\n주제/지시: ${prompt}\n\nrecent_posts: ${JSON.stringify(
     recentPosts
@@ -49,7 +69,17 @@ export async function generatePost({ prompt, recentPosts = [] }) {
   });
 
   const text = response.content.map((b) => (b.type === "text" ? b.text : "")).join("\n");
-  return parseStructuredPost(text);
+  const post = parseStructuredPost(text);
+
+  const { thumbnailUrl, inlineImageUrl } = await generatePostImages({
+    title: post.title,
+    topic: prompt,
+  });
+  post.bodyHtml = insertImages(post.bodyHtml, { thumbnailUrl, inlineImageUrl });
+  post.thumbnailUrl = thumbnailUrl;
+  post.inlineImageUrl = inlineImageUrl;
+
+  return post;
 }
 
 export async function generateTopicIdeas({ dailyCount = 5, recentTopics = [] }) {
