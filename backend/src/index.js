@@ -25,6 +25,15 @@ app.use("/api/posts", postsRouter);
 
 app.get("/api/health", (req, res) => res.json({ ok: true }));
 
+// In production the frontend is built into ../frontend/dist and served from
+// this same process, so the whole app is reachable as a single web service
+// (no separate frontend hosting/CORS setup needed for deployment).
+const FRONTEND_DIST = path.resolve(__dirname, "../../frontend/dist");
+app.use(express.static(FRONTEND_DIST));
+app.get(/^(?!\/api|\/uploads).*/, (req, res) => {
+  res.sendFile(path.join(FRONTEND_DIST, "index.html"));
+});
+
 startScheduler();
 
 const port = process.env.PORT || 4000;
