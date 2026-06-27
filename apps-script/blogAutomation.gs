@@ -9,7 +9,10 @@
  *   GEMINI_API_KEY - https://aistudio.google.com/apikey 에서 발급
  *   BLOG_ID        - 자동 발행할 Blogger 블로그 ID
  *
- * 고급 서비스로 "Blogger API"를 추가해야 함 (왼쪽 메뉴 서비스 + 클릭).
+ * Blogger API는 Apps Script 고급 서비스 목록에서 빠졌기 때문에,
+ * 고급 서비스 추가 없이 REST API를 OAuth 토큰으로 직접 호출한다.
+ * 이를 위해 appsscript.json(매니페스트)에 blogger 권한(scope)을 직접 선언해야 함.
+ * 자세한 설정 방법은 저장소 루트의 APPS_SCRIPT_SETUP.md 참고.
  */
 
 const GEMINI_MODEL = 'gemini-2.0-flash';
@@ -47,9 +50,28 @@ function getProp_(key) {
   return value;
 }
 
+function bloggerFetch_(method, path, payload) {
+  const url = `https://www.googleapis.com/blogger/v3/${path}`;
+  const options = {
+    method,
+    headers: { Authorization: `Bearer ${ScriptApp.getOAuthToken()}` },
+    muteHttpExceptions: true,
+  };
+  if (payload) {
+    options.contentType = 'application/json';
+    options.payload = JSON.stringify(payload);
+  }
+  const resp = UrlFetchApp.fetch(url, options);
+  const code = resp.getResponseCode();
+  if (code >= 300) {
+    throw new Error(`Blogger API 오류 (${code}): ${resp.getContentText()}`);
+  }
+  return JSON.parse(resp.getContentText());
+}
+
 function getRecentPostTitles_(blogId, maxResults) {
-  const resp = Blogger.Posts.list(blogId, { maxResults: maxResults || 10 });
-  const items = resp.items || [];
+  const data = bloggerFetch_('get', `blogs/${blogId}/posts?maxResults=${maxResults || 10}&fetchBodies=false`);
+  const items = data.items || [];
   return items.map((p) => p.title);
 }
 
@@ -82,14 +104,11 @@ function generatePost_(recentTitles) {
 
 function publishToBlogger_(post) {
   const blogId = getProp_('BLOG_ID');
-  return Blogger.Posts.insert(
-    {
-      title: post.title,
-      content: post.body_html,
-      labels: post.labels || [],
-    },
-    blogId
-  );
+  return bloggerFetch_('post', `blogs/${blogId}/posts/`, {
+    title: post.title,
+    content: post.body_html,
+    labels: post.labels || [],
+  });
 }
 
 /**
