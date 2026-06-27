@@ -1,4 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -16,7 +16,18 @@ export const KEYWORD_PROMPT = fs.readFileSync(
   "utf-8"
 );
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+
+// Gemini's built-in Google Search grounding tool lets the model actually search
+// the web instead of guessing, which the keyword prompt's [웹검색 실행 원칙] requires.
+async function callGemini(userMessage, { grounding = false } = {}) {
+  const model = genAI.getGenerativeModel({
+    model: "gemini-2.0-flash",
+    tools: grounding ? [{ googleSearch: {} }] : undefined,
+  });
+  const result = await model.generateContent(userMessage);
+  return result.response.text();
+}
 
 // Parses the structured output blocks the writing prompt asks the model to emit.
 function parseStructuredPost(text) {
@@ -62,13 +73,7 @@ export async function generatePost({ prompt, recentPosts = [] }) {
     recentPosts
   )}`;
 
-  const response = await anthropic.messages.create({
-    model: "claude-sonnet-4-6",
-    max_tokens: 4096,
-    messages: [{ role: "user", content: userMessage }],
-  });
-
-  const text = response.content.map((b) => (b.type === "text" ? b.text : "")).join("\n");
+  const text = await callGemini(userMessage, { grounding: true });
   const post = parseStructuredPost(text);
 
   const { thumbnailUrl, inlineImageUrl } = await generatePostImages({
@@ -87,11 +92,5 @@ export async function generateTopicIdeas({ dailyCount = 5, recentTopics = [] }) 
     recentTopics
   )}`;
 
-  const response = await anthropic.messages.create({
-    model: "claude-sonnet-4-6",
-    max_tokens: 4096,
-    messages: [{ role: "user", content: userMessage }],
-  });
-
-  return response.content.map((b) => (b.type === "text" ? b.text : "")).join("\n");
+  return callGemini(userMessage, { grounding: true });
 }

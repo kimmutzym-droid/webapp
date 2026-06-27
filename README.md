@@ -3,7 +3,7 @@
 여러 Blogger(블로그스팟) 블로그의 글 작성과 예약 발행을 자동화하는 웹앱.
 
 ## 구조
-- `backend/`: Express API + SQLite + node-cron 스케줄러. Google OAuth로 Blogger 연동, Claude API로 콘텐츠 생성.
+- `backend/`: Express API + SQLite + node-cron 스케줄러. Google OAuth로 Blogger 연동, Gemini API(무료 티어)로 콘텐츠 생성, Pollinations.ai(무료)로 이미지 생성.
 - `frontend/`: React(Vite) PWA 대시보드. 블로그 연결/시간대 설정, 포스트 작성(대상 블로그 선택), 발행 현황 모니터링.
 - `prompts/`: 키워드 분석 및 글쓰기 AI 프롬프트 템플릿.
 
@@ -12,7 +12,7 @@
 ### 백엔드
 ```bash
 cd backend
-cp .env.example .env   # GOOGLE_CLIENT_ID/SECRET, ANTHROPIC_API_KEY 입력
+cp .env.example .env   # GOOGLE_CLIENT_ID/SECRET, GEMINI_API_KEY 입력
 npm install
 npm run dev
 ```
