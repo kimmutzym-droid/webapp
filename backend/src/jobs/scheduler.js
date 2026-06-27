@@ -6,15 +6,17 @@ function countPublishedToday(blogId) {
   const row = db
     .prepare(
       `SELECT COUNT(*) as n FROM post_targets
-       WHERE blog_id = ? AND status = 'published' AND date(published_at) = date('now')`
+       WHERE blog_id = ? AND status = 'published' AND date(published_at, '+9 hours') = date('now', '+9 hours')`
     )
     .get(blogId);
   return row.n;
 }
 
+const KST_OFFSET_MINUTES = 9 * 60;
+
 function isSlotDue(timeSlots) {
-  const now = new Date();
-  const hhmm = now.toISOString().slice(11, 16); // UTC; adjust if needed
+  const now = new Date(Date.now() + KST_OFFSET_MINUTES * 60 * 1000);
+  const hhmm = now.toISOString().slice(11, 16); // user enters slots in KST (UTC+9)
   return timeSlots.some((slot) => slot === hhmm);
 }
 

@@ -51,7 +51,7 @@ export default function BlogsPage() {
             onBlur={(e) => updateLimit(blog, e.target.value)}
           />
 
-          <label>발행 시간대 (UTC 기준 HH:MM, 쉼표로 구분, 예: 01:00,05:00,09:00)</label>
+          <label>발행 시간대 (한국 시간 기준 HH:MM, 쉼표로 구분, 예: 09:00,13:00,18:00)</label>
           <input
             type="text"
             defaultValue={blog.time_slots.join(",")}
