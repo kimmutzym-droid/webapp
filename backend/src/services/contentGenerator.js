@@ -22,7 +22,7 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 // the web instead of guessing, which the keyword prompt's [웹검색 실행 원칙] requires.
 async function callGemini(userMessage, { grounding = false } = {}) {
   const model = genAI.getGenerativeModel({
-    model: "gemini-2.0-flash",
+    model: "gemini-flash-latest",
     tools: grounding ? [{ googleSearch: {} }] : undefined,
   });
   const result = await model.generateContent(userMessage);
