@@ -1,21 +1,21 @@
 /**
- * Google Apps Script 블로그 자동화 (Render/OAuth 클라이언트 불필요 버전)
+ * Google Apps Script 블로그 글 반자동화 (구글시트 저장 버전)
+ *
+ * 매일 자동으로 Gemini가 글을 써서 구글시트에 한 줄씩 추가한다.
+ * Blogger에 올리는 건 사람이 시트를 보고 직접 복사-붙여넣기 한다 (Blogger API 불필요).
  *
  * 사용법은 저장소 루트의 APPS_SCRIPT_SETUP.md 참고.
- * 이 글쓰기 지침은 prompts/blog-writing-prompt.md 원본을 기반으로 함.
+ * 글쓰기 지침은 prompts/blog-writing-prompt.md 원본을 기반으로 함.
  * 원본 프롬프트를 수정하면 아래 WRITING_GUIDE 상수도 함께 반영할 것.
  *
  * 필요한 스크립트 속성 (프로젝트 설정 > 스크립트 속성):
  *   GEMINI_API_KEY - https://aistudio.google.com/apikey 에서 발급
- *   BLOG_ID        - 자동 발행할 Blogger 블로그 ID
- *
- * Blogger API는 Apps Script 고급 서비스 목록에서 빠졌기 때문에,
- * 고급 서비스 추가 없이 REST API를 OAuth 토큰으로 직접 호출한다.
- * 이를 위해 appsscript.json(매니페스트)에 blogger 권한(scope)을 직접 선언해야 함.
- * 자세한 설정 방법은 저장소 루트의 APPS_SCRIPT_SETUP.md 참고.
+ *   SHEET_ID       - 결과를 저장할 구글시트 ID (시트 URL 중간의 긴 문자열)
  */
 
 const GEMINI_MODEL = 'gemini-2.0-flash';
+const SHEET_NAME = '글목록';
+const HEADER = ['생성일시', '제목', 'meta_description', '라벨', '본문(HTML)', '상태'];
 
 const WRITING_GUIDE = `
 너는 한국어 애드센스 블로그(Blogger/블로그스팟)용 SEO 글쓰기 전문가다.
@@ -31,7 +31,7 @@ const WRITING_GUIDE = `
 - 같은 표현/문장 구조를 기계적으로 반복하지 않는다.
 
 [중복 방지]
-recent_posts로 최근 발행한 제목 목록이 주어지면, 같은 주제/제목/문장 구조를 피하고 다른 각도로 작성한다.
+recent_posts로 최근 생성한 제목 목록이 주어지면, 같은 주제/제목/문장 구조를 피하고 다른 각도로 작성한다.
 
 [출력 형식]
 다른 설명 없이 아래 JSON 객체 하나만 출력한다 (마크다운 코드블록 금지):
@@ -50,29 +50,25 @@ function getProp_(key) {
   return value;
 }
 
-function bloggerFetch_(method, path, payload) {
-  const url = `https://www.googleapis.com/blogger/v3/${path}`;
-  const options = {
-    method,
-    headers: { Authorization: `Bearer ${ScriptApp.getOAuthToken()}` },
-    muteHttpExceptions: true,
-  };
-  if (payload) {
-    options.contentType = 'application/json';
-    options.payload = JSON.stringify(payload);
+function getSheet_() {
+  const sheetId = getProp_('SHEET_ID');
+  const ss = SpreadsheetApp.openById(sheetId);
+  let sheet = ss.getSheetByName(SHEET_NAME);
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_NAME);
   }
-  const resp = UrlFetchApp.fetch(url, options);
-  const code = resp.getResponseCode();
-  if (code >= 300) {
-    throw new Error(`Blogger API 오류 (${code}): ${resp.getContentText()}`);
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow(HEADER);
   }
-  return JSON.parse(resp.getContentText());
+  return sheet;
 }
 
-function getRecentPostTitles_(blogId, maxResults) {
-  const data = bloggerFetch_('get', `blogs/${blogId}/posts?maxResults=${maxResults || 10}&fetchBodies=false`);
-  const items = data.items || [];
-  return items.map((p) => p.title);
+function getRecentTitles_(sheet, maxResults) {
+  const lastRow = sheet.getLastRow();
+  if (lastRow <= 1) return [];
+  const startRow = Math.max(2, lastRow - (maxResults || 10) + 1);
+  const titles = sheet.getRange(startRow, 2, lastRow - startRow + 1, 1).getValues();
+  return titles.map((row) => row[0]).filter(String);
 }
 
 function callGemini_(prompt) {
@@ -102,22 +98,21 @@ function generatePost_(recentTitles) {
   return callGemini_(prompt);
 }
 
-function publishToBlogger_(post) {
-  const blogId = getProp_('BLOG_ID');
-  return bloggerFetch_('post', `blogs/${blogId}/posts/`, {
-    title: post.title,
-    content: post.body_html,
-    labels: post.labels || [],
-  });
-}
-
 /**
- * 시간 기반 트리거에 연결할 진입점. 하루 한 번 실행하면 글 1개를 자동 생성/발행한다.
+ * 시간 기반 트리거에 연결할 진입점. 하루 한 번 실행하면 글 1개를 생성해 시트에 추가한다.
+ * Blogger 발행은 사람이 시트를 보고 직접 복사-붙여넣기 한다.
  */
 function runDaily() {
-  const blogId = getProp_('BLOG_ID');
-  const recentTitles = getRecentPostTitles_(blogId, 10);
+  const sheet = getSheet_();
+  const recentTitles = getRecentTitles_(sheet, 10);
   const post = generatePost_(recentTitles);
-  const published = publishToBlogger_(post);
-  Logger.log(`발행 완료: ${published.url}`);
+  sheet.appendRow([
+    new Date(),
+    post.title,
+    post.meta_description,
+    (post.labels || []).join(', '),
+    post.body_html,
+    '대기중',
+  ]);
+  Logger.log(`시트에 추가 완료: ${post.title}`);
 }
